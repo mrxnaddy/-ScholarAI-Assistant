@@ -129,6 +129,7 @@ Strict Rules:
 4) NEVER write generic placeholders like 'YourName' or 'YOUR_NAME'. Dynamically extract the student's name from the provided Student Profile JSON (e.g., format sample filenames as `CNIC_NadirHussain.pdf`, `SOP_NadirHussain.pdf`). If no name is provided in the profile, default to 'NadirHussain'.
 5) Inside Markdown tables, keep document lists separated by clean commas without HTML break tags to ensure proper cell wrapping.
 6) Provide clean Markdown links for official portals.
+7) CRITICAL FORMATTING RULE: When you receive data from any tool (whether Database records or Web Search results), NEVER dump raw JSON, dictionaries, or lists. You must always synthesize and present that data using clean Markdown bullet points or formatted tables, including the Title, description, and clickable Markdown links `[View Opportunity](URL)` where applicable.
 """
 
 def sanitize_output(text: str) -> str:
