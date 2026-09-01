@@ -1,0 +1,87 @@
+[
+  {
+    "id": "opp001",
+    "name": "Stipendium Hungaricum Scholarship",
+    "provider": "Tempus Public Foundation / HEC",
+    "description": "Fully funded Hungarian government scholarship for international students pursuing undergraduate, master's, or doctoral studies.",
+    "min_cgpa": 2.5,
+    "degrees": ["BS", "MS", "PhD"],
+    "eligible_locations": ["Pakistan"],
+    "required_documents": [
+      "CNIC or Passport",
+      "Academic Transcript",
+      "English Proficiency Certificate",
+      "Statement of Purpose"
+    ],
+    "deadline": "2027-01-15",
+    "official_source": "https://stipendiumhungaricum.hu"
+  },
+  {
+    "id": "opp002",
+    "name": "Fulbright Graduate Student Program",
+    "provider": "USEFP",
+    "description": "Full scholarship funded by the US Department of State covering tuition, textbooks, airfare, a living stipend, and health insurance for Master's and PhD studies.",
+    "min_cgpa": 3.0,
+    "degrees": ["MS", "PhD"],
+    "eligible_locations": ["Pakistan"],
+    "required_documents": [
+      "GRE Score Report",
+      "Academic Transcripts",
+      "3 Recommendation Letters",
+      "Personal Statement"
+    ],
+    "deadline": "2027-05-13",
+    "official_source": "https://usefp.org"
+  },
+  {
+    "id": "opp003",
+    "name": "EHSAAS Undergraduate Scholarship Program",
+    "provider": "Higher Education Commission (HEC)",
+    "description": "Need-based scholarship program providing tuition fee waivers and living stipends for deserving undergraduate students in public sector universities.",
+    "min_cgpa": 2.0,
+    "degrees": ["BS", "BSCS", "BSSE"],
+    "eligible_locations": ["Pakistan"],
+    "required_documents": [
+      "CNIC or B-Form",
+      "Father or Guardian Income Certificate",
+      "University Enrollment Certificate",
+      "Utility Bills Copy"
+    ],
+    "deadline": "2026-12-31",
+    "official_source": "https://hec.gov.pk"
+  },
+  {
+    "id": "opp004",
+    "name": "PEEF Master Level Scholarship",
+    "provider": "Punjab Educational Endowment Fund",
+    "description": "Financial assistance program for talented and needy students of Punjab pursuing higher education at postgraduate levels.",
+    "min_cgpa": 2.5,
+    "degrees": ["MS", "MSc"],
+    "eligible_locations": ["Pakistan"],
+    "required_documents": [
+      "Punjab Domicile",
+      "Father Income Slip",
+      "Bachelor Academic Transcript",
+      "CNIC"
+    ],
+    "deadline": "2026-11-30",
+    "official_source": "https://peef.org.pk"
+  },
+  {
+    "id": "opp005",
+    "name": "Commonwealth General Scholarships",
+    "provider": "Commonwealth Scholarship Commission",
+    "description": "Prestigious UK scholarship scheme enabling high-caliber international students to undertake full-time postgraduate study at participating UK universities.",
+    "min_cgpa": 3.0,
+    "degrees": ["MS", "PhD"],
+    "eligible_locations": ["Pakistan"],
+    "required_documents": [
+      "Academic Transcripts",
+      "Two References",
+      "Proof of English Proficiency",
+      "Research Proposal"
+    ],
+    "deadline": "2026-10-15",
+    "official_source": "https://cscuk.fcdo.gov.uk"
+  }
+]
