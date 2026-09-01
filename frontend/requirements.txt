@@ -1,6 +1,5 @@
 streamlit
 groq
-openai
-python-dotenv
+tavily-python
 requests
-beautifulsoup4
+python-dotenv
