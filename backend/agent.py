@@ -162,7 +162,6 @@ def ask_ai(message: str, student: dict = None) -> str:
     if not student:
         student = {}
 
-    # Set default values for student profile if missing
     if not student.get("name"):
         student["name"] = "Nadir Hussain"
     if not student.get("degree"):
@@ -185,14 +184,23 @@ def ask_ai(message: str, student: dict = None) -> str:
                         title = item.get("title", "Opportunity")
                         opp_id = item.get("id", "")
                         desc = item.get("description", "")
-                        formatted_lines.append(f"- **{title}** (ID: `{opp_id}`): {desc}")
+                        eligibility = item.get("eligibility", {})
+                        deadline = item.get("deadline", "Open")
+                        formatted_lines.append(
+                            f"- **{title}** (ID: `{opp_id}`)\n"
+                            f"  - **Description**: {desc}\n"
+                            f"  - **Deadline**: {deadline}"
+                        )
                     return "\n".join(formatted_lines)
                 return "No matching local opportunities found."
 
             elif func_name == "check_eligibility":
                 opp_id = args.get("opportunity_id")
                 opp = next((i for i in all_opportunities if i["id"] == opp_id), None)
-                return check_eligibility(student, opp) if opp else {"error": "Not found"}
+                if not opp:
+                    return json.dumps({"error": "Opportunity not found in database"})
+                eligibility_result = check_eligibility(student, opp)
+                return json.dumps(eligibility_result) if not isinstance(eligibility_result, str) else eligibility_result
 
             elif func_name == "get_required_documents":
                 opp_id = args.get("opportunity_id")
@@ -204,7 +212,7 @@ def ask_ai(message: str, student: dict = None) -> str:
                     s = str(doc)
                     s = re.sub(r'<br\s*/?>', ', ', s, flags=re.IGNORECASE)
                     cleaned_docs.append(s.strip(" ,"))
-                return cleaned_docs
+                return json.dumps(cleaned_docs)
 
             elif func_name == "search_web":
                 raw_res = search_web(args.get("query", message))
@@ -214,6 +222,13 @@ def ask_ai(message: str, student: dict = None) -> str:
                         title = item.get("title", "Opportunity")
                         url = item.get("url", "#")
                         content = item.get("content", "")
+                        
+                        # Clean raw markdown table pipes and excess spaces from web snippets
+                        content = re.sub(r'\|.*?\|', ' ', content)
+                        content = re.sub(r'\s+', ' ', content).strip()
+                        if len(content) > 250:
+                            content = content[:250] + "..."
+                            
                         if url:
                             formatted_lines.append(f"- **[{title}]({url})**\n  {content}")
                         else:
@@ -226,8 +241,8 @@ def ask_ai(message: str, student: dict = None) -> str:
                 res_str = json.dumps(raw_res) if isinstance(raw_res, (dict, list)) else str(raw_res)
                 return res_str[:1000]
         except Exception as e:
-            return {"error": str(e)}
-        return {"error": "Invalid tool"}
+            return json.dumps({"error": str(e)})
+        return json.dumps({"error": "Invalid tool"})
 
     user_prompt = f"Student Profile: {json.dumps(student)}\nUser Query: {message}"
     messages = [
