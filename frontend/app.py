@@ -5,9 +5,9 @@ import os
 # Root project folder ko path mein add karna taake 'backend' package theek se import ho
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from backend.agent import run_agent
+from backend.agent import ask_ai
 from backend.database import get_all_opportunities
-from backend.web_search import search_scholarships_web
+from backend.web_search import search_web as search_scholarships_web
 
 st.set_page_config(page_title="ScholarAI - Smart Opportunity Advisor", layout="wide")
 st.title("🎓 ScholarAI Assistant")
@@ -31,7 +31,7 @@ with tab1:
     if st.button("Submit Query"):
         with st.spinner("ScholarAI is processing tools and checking sources..."):
             try:
-                response_text = run_agent(user_query, student_payload)
+                response_text = ask_ai(user_query, student_payload)
                 st.markdown("### Answer")
                 st.write(response_text)
             except Exception as e:
