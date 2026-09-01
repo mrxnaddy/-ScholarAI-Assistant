@@ -33,7 +33,7 @@ with tab1:
             try:
                 response_text = ask_ai(user_query, student_payload)
                 st.markdown("### Answer")
-                st.write(response_text)
+                st.markdown(response_text)
             except Exception as e:
                 st.error(f"Error processing AI query: {str(e)}")
 
@@ -42,7 +42,14 @@ with tab2:
     if st.button("Load DB Records"):
         try:
             records = get_all_opportunities()
-            st.json(records)
+            if isinstance(records, list) and records:
+                for item in records:
+                    title = item.get("title", "Opportunity")
+                    opp_id = item.get("id", "")
+                    desc = item.get("description", "")
+                    st.markdown(f"- **{title}** (ID: `{opp_id}`)\n  {desc}")
+            else:
+                st.info("No records found.")
         except Exception as e:
             st.error(f"Error fetching DB records: {str(e)}")
 
@@ -50,8 +57,19 @@ with tab3:
     st.subheader("Live Web Search")
     search_q = st.text_input("Search Keyword", value="HEC Pakistan scholarships 2026")
     if st.button("Execute Web Search"):
-        try:
-            search_results = search_scholarships_web(search_q)
-            st.write(search_results)
-        except Exception as e:
-            st.error(f"Error executing web search: {str(e)}")
+        with st.spinner("Searching web sources..."):
+            try:
+                search_results = search_scholarships_web(search_q)
+                if isinstance(search_results, list) and search_results:
+                    for item in search_results:
+                        title = item.get("title", "Result")
+                        url = item.get("url", "#")
+                        content = item.get("content", "")
+                        if url:
+                            st.markdown(f"- **[{title}]({url})**\n  {content}")
+                        else:
+                            st.markdown(f"- **{title}**: {content}")
+                else:
+                    st.info("No search results found.")
+            except Exception as e:
+                st.error(f"Error executing web search: {str(e)}")
