@@ -1,7 +1,13 @@
 import streamlit as st
-import requests
+import sys
+import os
 
-API_BASE_URL = "http://127.0.0.1:8000"
+# Backend folder ko path mein add karna taake functions direct import ho sakein
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../backend')))
+
+from agent import run_agent  # Aap ke agent function ka main handler
+from database import get_all_opportunities  # DB records ke liye
+from web_search import search_scholarships_web  # Web search ke liye
 
 st.set_page_config(page_title="ScholarAI - Smart Opportunity Advisor", layout="wide")
 st.title("🎓 ScholarAI Assistant")
@@ -25,25 +31,19 @@ with tab1:
     if st.button("Submit Query"):
         with st.spinner("ScholarAI is processing tools and checking sources..."):
             try:
-                res = requests.post(
-                    f"{API_BASE_URL}/ask-ai",
-                    json={"message": user_query, "student": student_payload}
-                )
-                if res.status_code == 200:
-                    st.markdown("### Answer")
-                    st.write(res.json().get("answer"))
-                else:
-                    st.error(f"API Connection Failed (Status: {res.status_code})")
+                # Direct agent function call (No HTTP requests needed)
+                response_text = run_agent(user_query, student_payload)
+                st.markdown("### Answer")
+                st.write(response_text)
             except Exception as e:
-                st.error(f"Could not connect to backend server: {str(e)}")
+                st.error(f"Error processing AI query: {str(e)}")
 
 with tab2:
     st.subheader("Database Opportunities")
     if st.button("Load DB Records"):
         try:
-            res = requests.get(f"{API_BASE_URL}/opportunities")
-            if res.status_code == 200:
-                st.json(res.json())
+            records = get_all_opportunities()
+            st.json(records)
         except Exception as e:
             st.error(f"Error fetching DB records: {str(e)}")
 
@@ -52,8 +52,7 @@ with tab3:
     search_q = st.text_input("Search Keyword", value="HEC Pakistan scholarships 2026")
     if st.button("Execute Web Search"):
         try:
-            res = requests.get(f"{API_BASE_URL}/search-scholarships", params={"q": search_q})
-            if res.status_code == 200:
-                st.write(res.json())
+            search_results = search_scholarships_web(search_q)
+            st.write(search_results)
         except Exception as e:
             st.error(f"Error executing web search: {str(e)}")
