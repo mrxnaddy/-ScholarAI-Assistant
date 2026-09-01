@@ -175,14 +175,25 @@ def ask_ai(message: str, student: dict = None) -> str:
     def execute_tool(func_name: str, args: dict):
         try:
             if func_name == "search_opportunities":
-                return search_opportunities(
+                raw_res = search_opportunities(
                     degree=args.get("degree") or student.get("degree"),
                     location=args.get("location") or student.get("location")
                 )
+                if isinstance(raw_res, list) and raw_res:
+                    formatted_lines = ["Here are the matching local database opportunities:"]
+                    for item in raw_res:
+                        title = item.get("title", "Opportunity")
+                        opp_id = item.get("id", "")
+                        desc = item.get("description", "")
+                        formatted_lines.append(f"- **{title}** (ID: `{opp_id}`): {desc}")
+                    return "\n".join(formatted_lines)
+                return "No matching local opportunities found."
+
             elif func_name == "check_eligibility":
                 opp_id = args.get("opportunity_id")
                 opp = next((i for i in all_opportunities if i["id"] == opp_id), None)
                 return check_eligibility(student, opp) if opp else {"error": "Not found"}
+
             elif func_name == "get_required_documents":
                 opp_id = args.get("opportunity_id")
                 opp = next((i for i in all_opportunities if i["id"] == opp_id), None)
@@ -194,10 +205,22 @@ def ask_ai(message: str, student: dict = None) -> str:
                     s = re.sub(r'<br\s*/?>', ', ', s, flags=re.IGNORECASE)
                     cleaned_docs.append(s.strip(" ,"))
                 return cleaned_docs
+
             elif func_name == "search_web":
                 raw_res = search_web(args.get("query", message))
-                res_str = json.dumps(raw_res) if isinstance(raw_res, (dict, list)) else str(raw_res)
-                return res_str[:1000]
+                if isinstance(raw_res, list) and raw_res:
+                    formatted_lines = ["Here are the live web search results:"]
+                    for item in raw_res:
+                        title = item.get("title", "Opportunity")
+                        url = item.get("url", "#")
+                        content = item.get("content", "")
+                        if url:
+                            formatted_lines.append(f"- **[{title}]({url})**\n  {content}")
+                        else:
+                            formatted_lines.append(f"- **{title}**: {content}")
+                    return "\n".join(formatted_lines)[:3000]
+                return str(raw_res)
+
             elif func_name == "extract_scholarship_details_from_url":
                 raw_res = extract_scholarship_details_from_url(args.get("url"))
                 res_str = json.dumps(raw_res) if isinstance(raw_res, (dict, list)) else str(raw_res)
@@ -252,7 +275,7 @@ def ask_ai(message: str, student: dict = None) -> str:
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
-                        "content": json.dumps(result)
+                        "content": json.dumps(result) if not isinstance(result, str) else result
                     })
             else:
                 return sanitize_output(response_message.content or "No response generated.")
