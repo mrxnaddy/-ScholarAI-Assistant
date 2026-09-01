@@ -22,7 +22,6 @@ groq_key = os.getenv("GROQ_API_KEY")
 openrouter_key = os.getenv("OPENROUTER_API_KEY")
 openai_key = os.getenv("OPENAI_API_KEY")
 
-# Active Groq Models prioritized for execution speed and tool-calling support
 GROQ_MODELS = [
     "openai/gpt-oss-20b",
     "openai/gpt-oss-120b",
@@ -116,24 +115,17 @@ TOOLS = [
 ]
 
 SYSTEM_INSTRUCTIONS = """
-You are ScholarAI, an intelligent AI student opportunity advisor.
+You are ScholarAI, an elite professional student opportunity and scholarship advisor.
 
-Your core duties:
-- Suggest scholarships and opportunities matching student profiles.
-- Check eligibility and provide clear document checklists with next steps.
-
-Strict Rules:
-1) Always issue tool calls with valid, properly formatted JSON arguments.
-2) Check local database first, and use `search_web` if fewer than 5 eligible opportunities are retrieved.
-3) Use CLEAN MARKDOWN ONLY. Absolutely NO HTML tags (do not write <br>, <div>, etc.).
-4) NEVER write generic placeholders like 'YourName' or 'YOUR_NAME'. Dynamically extract the student's name from the provided Student Profile JSON (e.g., format sample filenames as `CNIC_NadirHussain.pdf`, `SOP_NadirHussain.pdf`). If no name is provided in the profile, default to 'NadirHussain'.
-5) Inside Markdown tables, keep document lists separated by clean commas without HTML break tags to ensure proper cell wrapping.
-6) Provide clean Markdown links for official portals.
-7) CRITICAL FORMATTING RULE: When you receive data from any tool (whether Database records or Web Search results), NEVER dump raw JSON, dictionaries, or lists. You must always synthesize and present that data using clean Markdown bullet points or formatted tables, including the Title, description, and clickable Markdown links `[View Opportunity](URL)` where applicable.
+Core Directives:
+1. Provide precise, highly structured, and concise answers directly addressing the user query.
+2. Owe zero fluff, zero introductory filler statements, and zero conversational padding. 
+3. Extract and display only essential data points: exact scholarship title, core eligibility/summary, deadline, and clean markdown link.
+4. Use clean Markdown bullet points only. Never output raw JSON, dictionaries, raw lists, or HTML tags.
+5. Dynamically extract the student's name from profile data (defaulting to NadirHussain for file names when required).
 """
 
 def sanitize_output(text: str) -> str:
-    """Post-processing filter to strip any stray HTML tags."""
     if not text:
         return ""
     clean = re.sub(r'<br\s*/?>', ' ', text, flags=re.IGNORECASE)
@@ -141,9 +133,7 @@ def sanitize_output(text: str) -> str:
     return clean.strip()
 
 def create_completion_with_fallback(client_instance, current_model, **kwargs):
-    """Executes chat completion with dynamic fallback across available models."""
     models_to_try = [current_model] + [m for m in GROQ_MODELS if m != current_model] if groq_key else [current_model]
-    
     last_err = None
     for model in models_to_try:
         try:
@@ -179,67 +169,53 @@ def ask_ai(message: str, student: dict = None) -> str:
                     location=args.get("location") or student.get("location")
                 )
                 if isinstance(raw_res, list) and raw_res:
-                    formatted_lines = ["Here are the matching local database opportunities:"]
+                    cleaned = []
                     for item in raw_res:
                         title = item.get("title", "Opportunity")
                         opp_id = item.get("id", "")
                         desc = item.get("description", "")
-                        eligibility = item.get("eligibility", {})
                         deadline = item.get("deadline", "Open")
-                        formatted_lines.append(
-                            f"- **{title}** (ID: `{opp_id}`)\n"
-                            f"  - **Description**: {desc}\n"
-                            f"  - **Deadline**: {deadline}"
-                        )
-                    return "\n".join(formatted_lines)
+                        cleaned.append(f"- **{title}** (ID: `{opp_id}`)\n  - **Summary**: {desc}\n  - **Deadline**: {deadline}")
+                    return "\n".join(cleaned)
                 return "No matching local opportunities found."
 
             elif func_name == "check_eligibility":
                 opp_id = args.get("opportunity_id")
                 opp = next((i for i in all_opportunities if i["id"] == opp_id), None)
                 if not opp:
-                    return json.dumps({"error": "Opportunity not found in database"})
-                eligibility_result = check_eligibility(student, opp)
-                return json.dumps(eligibility_result) if not isinstance(eligibility_result, str) else eligibility_result
+                    return json.dumps({"error": "Opportunity not found"})
+                res = check_eligibility(student, opp)
+                return json.dumps(res) if not isinstance(res, str) else res
 
             elif func_name == "get_required_documents":
                 opp_id = args.get("opportunity_id")
                 opp = next((i for i in all_opportunities if i["id"] == opp_id), None)
                 raw_docs = get_required_documents(opp) if opp else []
-                
-                cleaned_docs = []
-                for doc in raw_docs:
-                    s = str(doc)
-                    s = re.sub(r'<br\s*/?>', ', ', s, flags=re.IGNORECASE)
-                    cleaned_docs.append(s.strip(" ,"))
+                cleaned_docs = [re.sub(r'<br\s*/?>', ', ', str(doc), flags=re.IGNORECASE).strip(" ,") for doc in raw_docs]
                 return json.dumps(cleaned_docs)
 
             elif func_name == "search_web":
                 raw_res = search_web(args.get("query", message))
                 if isinstance(raw_res, list) and raw_res:
-                    formatted_lines = ["Here are the live web search results:"]
+                    cleaned = []
                     for item in raw_res:
-                        title = item.get("title", "Opportunity")
+                        title = item.get("title", "").strip()
                         url = item.get("url", "#")
                         content = item.get("content", "")
                         
-                        # Clean raw markdown table pipes and excess spaces from web snippets
                         content = re.sub(r'\|.*?\|', ' ', content)
                         content = re.sub(r'\s+', ' ', content).strip()
-                        if len(content) > 250:
-                            content = content[:250] + "..."
+                        if len(content) > 180:
+                            content = content[:180] + "..."
                             
-                        if url:
-                            formatted_lines.append(f"- **[{title}]({url})**\n  {content}")
-                        else:
-                            formatted_lines.append(f"- **{title}**: {content}")
-                    return "\n".join(formatted_lines)[:3000]
+                        if title and url:
+                            cleaned.append(f"- **[{title}]({url})**\n  - {content}")
+                    return "\n".join(cleaned[:6]) if cleaned else "No relevant web data found."
                 return str(raw_res)
 
             elif func_name == "extract_scholarship_details_from_url":
                 raw_res = extract_scholarship_details_from_url(args.get("url"))
-                res_str = json.dumps(raw_res) if isinstance(raw_res, (dict, list)) else str(raw_res)
-                return res_str[:1000]
+                return json.dumps(raw_res)[:1000] if isinstance(raw_res, (dict, list)) else str(raw_res)[:1000]
         except Exception as e:
             return json.dumps({"error": str(e)})
         return json.dumps({"error": "Invalid tool"})
@@ -258,7 +234,7 @@ def ask_ai(message: str, student: dict = None) -> str:
                 messages=messages,
                 tools=TOOLS,
                 tool_choice="auto",
-                temperature=0.1
+                temperature=0.0
             )
             MODEL_NAME = active_model
             response_message = response.choices[0].message
@@ -297,14 +273,14 @@ def ask_ai(message: str, student: dict = None) -> str:
 
         messages.append({
             "role": "user",
-            "content": "Provide final clear summary based on retrieved information using clean Markdown. Do NOT attempt any more tool calls."
+            "content": "Provide direct, concise, professional bullet points containing only title, deadline, and markdown link. No fluff."
         })
         
         final_response, _ = create_completion_with_fallback(
             client_instance=client,
             current_model=MODEL_NAME,
             messages=messages,
-            temperature=0.1
+            temperature=0.0
         )
         return sanitize_output(final_response.choices[0].message.content or "Completed.")
         
