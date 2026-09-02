@@ -21,22 +21,27 @@ load_dotenv(env_path)
 groq_key = os.getenv("GROQ_API_KEY")
 openrouter_key = os.getenv("OPENROUTER_API_KEY")
 openai_key = os.getenv("OPENAI_API_KEY")
+tavily_key = os.getenv("TAVILY_API_KEY")
 
+# Valid active Groq models
 GROQ_MODELS = [
-    "openai/gpt-oss-120b",
-    "openai/gpt-oss-20b",
-    "llama-3.3-70b-versatile"
+    "llama-3.1-70b-versatile",
+    "llama-3.1-8b-instant"
 ]
 
+# Primary client setup
 if groq_key:
     client = Groq(api_key=groq_key)
     MODEL_NAME = GROQ_MODELS[0]
+    PROVIDER = "groq"
 elif openrouter_key:
     client = OpenAI(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1")
     MODEL_NAME = "openai/gpt-oss-120b"
+    PROVIDER = "openrouter"
 elif openai_key:
     client = OpenAI(api_key=openai_key)
     MODEL_NAME = "gpt-4o-mini"
+    PROVIDER = "openai"
 else:
     raise RuntimeError("No API key configured in .env file.")
 
@@ -134,23 +139,39 @@ def sanitize_output(text: str) -> str:
     clean = re.sub(r'<[^>]+>', '', clean)
     return clean.strip()
 
-def create_completion_with_fallback(client_instance, current_model, **kwargs):
-    models_to_try = [current_model] + [m for m in GROQ_MODELS if m != current_model] if groq_key else [current_model]
+def create_completion_with_fallback(**kwargs):
+    global client, MODEL_NAME, PROVIDER
+    
+    # Define fallback execution chain: Groq models -> OpenAI (if available)
+    attempts = []
+    if groq_key:
+        for m in GROQ_MODELS:
+            attempts.append(("groq", Groq(api_key=groq_key), m))
+    if openai_key:
+        attempts.append(("openai", OpenAI(api_key=openai_key), "gpt-4o-mini"))
+    if openrouter_key:
+        attempts.append(("openrouter", OpenAI(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1"), "openai/gpt-oss-120b"))
+
     last_err = None
-    for model in models_to_try:
+    for prov, cli, model in attempts:
         try:
             kwargs["model"] = model
-            return client_instance.chat.completions.create(**kwargs), model
+            response = cli.chat.completions.create(**kwargs)
+            # Update global provider state on success
+            client = cli
+            MODEL_NAME = model
+            PROVIDER = prov
+            return response
         except Exception as err:
             last_err = err
             err_str = str(err).lower()
-            if any(k in err_str for k in ["404", "400", "decommissioned", "model_not_found"]):
+            if any(k in err_str for k in ["404", "400", "decommissioned", "model_not_found", "rate_limit"]):
                 continue
             raise err
+            
     raise last_err
 
 def ask_ai(message: str, student: dict = None) -> str:
-    global MODEL_NAME
     if not student:
         student = {}
 
@@ -230,15 +251,12 @@ def ask_ai(message: str, student: dict = None) -> str:
 
     try:
         for _ in range(5):
-            response, active_model = create_completion_with_fallback(
-                client_instance=client,
-                current_model=MODEL_NAME,
+            response = create_completion_with_fallback(
                 messages=messages,
                 tools=TOOLS,
                 tool_choice="auto",
                 temperature=0.0
             )
-            MODEL_NAME = active_model
             response_message = response.choices[0].message
 
             if response_message.tool_calls:
@@ -278,9 +296,7 @@ def ask_ai(message: str, student: dict = None) -> str:
             "content": "Provide direct, concise, professional bullet points containing only title, deadline, and markdown link. No fluff."
         })
         
-        final_response, _ = create_completion_with_fallback(
-            client_instance=client,
-            current_model=MODEL_NAME,
+        final_response = create_completion_with_fallback(
             messages=messages,
             temperature=0.0
         )
