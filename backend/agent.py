@@ -141,23 +141,21 @@ def sanitize_output(text: str) -> str:
 
 def create_completion_with_fallback(**kwargs):
     global client, MODEL_NAME, PROVIDER
-    
-    # Define fallback execution chain: Groq models -> OpenAI (if available)
+
     attempts = []
     if groq_key:
         for m in GROQ_MODELS:
             attempts.append(("groq", Groq(api_key=groq_key), m))
-    if openai_key:
-        attempts.append(("openai", OpenAI(api_key=openai_key), "gpt-4o-mini"))
     if openrouter_key:
         attempts.append(("openrouter", OpenAI(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1"), "openai/gpt-oss-120b"))
+    if openai_key:
+        attempts.append(("openai", OpenAI(api_key=openai_key), "gpt-4o-mini"))
 
     last_err = None
     for prov, cli, model in attempts:
         try:
             kwargs["model"] = model
             response = cli.chat.completions.create(**kwargs)
-            # Update global provider state on success
             client = cli
             MODEL_NAME = model
             PROVIDER = prov
@@ -165,10 +163,10 @@ def create_completion_with_fallback(**kwargs):
         except Exception as err:
             last_err = err
             err_str = str(err).lower()
-            if any(k in err_str for k in ["404", "400", "decommissioned", "model_not_found", "rate_limit"]):
+            if any(k in err_str for k in ["404", "400", "429", "decommissioned", "model_not_found", "rate_limit", "insufficient_quota", "quota"]):
                 continue
             raise err
-            
+
     raise last_err
 
 def ask_ai(message: str, student: dict = None) -> str:
