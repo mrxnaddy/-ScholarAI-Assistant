@@ -269,6 +269,8 @@ def ask_ai(message: str, student: dict = None) -> str:
 
         final_response = create_completion_with_fallback(
             messages=messages,
+            tools=TOOLS,
+            tool_choice="none",
             temperature=0.0
         )
         return sanitize_output(final_response.choices[0].message.content)
