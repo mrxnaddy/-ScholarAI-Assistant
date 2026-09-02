@@ -23,8 +23,10 @@ openrouter_key = os.getenv("OPENROUTER_API_KEY")
 openai_key = os.getenv("OPENAI_API_KEY")
 tavily_key = os.getenv("TAVILY_API_KEY")
 
-# Valid active Groq models
+# Valid active Groq models in custom priority order with fallback support
 GROQ_MODELS = [
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
     "qwen/qwen3.6-27b",
     "openai/gpt-oss-safeguard-20b"
 ]
@@ -36,7 +38,7 @@ if groq_key:
     PROVIDER = "groq"
 elif openrouter_key:
     client = OpenAI(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1")
-    MODEL_NAME = "openai/gpt-oss-120b"
+    MODEL_NAME = GROQ_MODELS[0]
     PROVIDER = "openrouter"
 elif openai_key:
     client = OpenAI(api_key=openai_key)
@@ -154,6 +156,7 @@ STRICT OUTPUT RULES:
 
 FINAL RESPONSE MUST CONTAIN NOTHING EXCEPT THE SCHOLARSHIP BULLET POINTS.
 """
+
 def sanitize_output(text: str) -> str:
     if not text:
         return ""
