@@ -4,3 +4,4 @@ openai
 tavily-python
 requests
 python-dotenv
+beautifulsoup4
