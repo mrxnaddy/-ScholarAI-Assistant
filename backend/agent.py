@@ -77,6 +77,20 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_required_documents",
+            "description": "Get required documents for a specific scholarship opportunity ID.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "opportunity_id": {"type": "string", "description": "ID of the scholarship opportunity"}
+                },
+                "required": ["opportunity_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "search_web",
             "description": "Search web for active scholarships if database has few options.",
             "parameters": {
@@ -95,7 +109,7 @@ You are ScholarAI, a scholarship advisor that outputs ONLY final structured resu
 
 TOOL USAGE RULES:
 1. If the user asks to find scholarships, ALWAYS call search_opportunities first.
-2. If the user asks to "check eligibility" (or it's implied by their query), you MUST call check_eligibility for EVERY opportunity found before giving your final answer. Never skip this step.
+2. If the user asks for eligibility or details, call check_eligibility and get_required_documents for EVERY opportunity found before giving your final answer.
 3. Only call search_web if the local database search returns fewer than 3 results.
 
 OUTPUT FORMAT RULES (strict):
@@ -104,9 +118,10 @@ OUTPUT FORMAT RULES (strict):
 3. Final answer must be ONLY markdown bullet points, nothing before or after them.
 4. Each bullet must be formatted EXACTLY like this, on separate lines:
     - **Title**
-      - Summary: one line, max 15 words
+      - Summary: one line description
       - Deadline: date
-      - Eligibility: ✅ Eligible / ❌ Not Eligible — one short reason
+      - Eligibility: ✅ Eligible / ❌ Not Eligible — short reason
+      - Required Documents: list key documents needed
       - Link: [Official Source](url)
 5. If no results found, output exactly one line: "No matching opportunities found."
 6. Never output JSON, raw pipes (|), code blocks, disclaimers, or apologies.
@@ -186,7 +201,8 @@ def ask_ai(message: str, student: dict = None) -> str:
                         opp_id = item.get("id", "")
                         desc = item.get("description", "")
                         deadline = item.get("deadline", "Open")
-                        cleaned.append(f"- **{title}** (ID: `{opp_id}`)\n  - **Summary**: {desc}\n  - **Deadline**: {deadline}")
+                        url = item.get("url", "#")
+                        cleaned.append(f"- **{title}** (ID: `{opp_id}`)\n  - Summary: {desc}\n  - Deadline: {deadline}\n  - Link: [Official Source]({url})")
                     return "\n".join(cleaned)
                 return "No matching local opportunities found."
 
@@ -198,6 +214,14 @@ def ask_ai(message: str, student: dict = None) -> str:
                 res = check_eligibility(student, opp)
                 return json.dumps(res) if not isinstance(res, str) else res
 
+            elif func_name == "get_required_documents":
+                opp_id = args.get("opportunity_id")
+                opp = next((i for i in all_opportunities if i["id"] == opp_id), None)
+                if not opp:
+                    return json.dumps({"error": "Opportunity not found"})
+                res = get_required_documents(opp)
+                return json.dumps(res) if not isinstance(res, str) else res
+
             elif func_name == "search_web":
                 raw_res = search_web(args.get("query", message))
                 if isinstance(raw_res, list) and raw_res:
@@ -207,7 +231,7 @@ def ask_ai(message: str, student: dict = None) -> str:
                         url = item.get("url", "#")
                         content = item.get("content", "")
                         if title and url:
-                            cleaned.append(f"- **[{title}]({url})**\n  - {content}")
+                            cleaned.append(f"- **[{title}]({url})**\n  - Summary: {content}\n  - Link: [Official Source]({url})")
                     return "\n".join(cleaned[:6]) if cleaned else "No relevant web data found."
                 return str(raw_res)
         except Exception as e:
@@ -264,7 +288,7 @@ def ask_ai(message: str, student: dict = None) -> str:
 
         messages.append({
             "role": "user",
-            "content": "Output ONLY the final scholarship bullet points in the exact required format. No conversational text."
+            "content": "Output ONLY the final scholarship bullet points in the exact required format including eligibility, documents, deadline, and links."
         })
 
         final_response = create_completion_with_fallback(
