@@ -25,8 +25,8 @@ tavily_key = os.getenv("TAVILY_API_KEY")
 
 # Valid active Groq models
 GROQ_MODELS = [
-    "llama-3.1-70b-versatile",
-    "llama-3.1-8b-instant"
+    "qwen/qwen3.6-27b",
+    "openai/gpt-oss-safeguard-20b"
 ]
 
 # Primary client setup
