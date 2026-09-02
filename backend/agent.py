@@ -24,10 +24,9 @@ openai_key = os.getenv("OPENAI_API_KEY")
 tavily_key = os.getenv("TAVILY_API_KEY")
 
 GROQ_MODELS = [
+    "llama-3.1-8b-instant",
     "openai/gpt-oss-120b",
-    "openai/gpt-oss-20b",
-    "qwen/qwen3.6-27b",
-    "openai/gpt-oss-safeguard-20b"
+    "openai/gpt-oss-20b"
 ]
 
 if groq_key:
@@ -117,20 +116,23 @@ OUTPUT FORMAT RULES (strict):
 def sanitize_output(text: str) -> str:
     if not text:
         return "- No matching opportunities found."
-    
-    # Sirf woh lines extract karna jo markdown bullet points hein (- **Title:** ...)
-    lines = text.split("\n")
-    bullet_lines = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("- **Title:**") or stripped.startswith("* **Title:**"):
-            bullet_lines.append(stripped)
-            
+
+    # Reasoning-model leaks hatao (think tags, raw tool_call text jo kabhi content mein aa jate hain)
+    clean = re.sub(r'<think>.*?</think>', '', text, flags=re.IGNORECASE | re.DOTALL)
+    clean = re.sub(r'<tool_call>.*?</tool_call>', '', clean, flags=re.IGNORECASE | re.DOTALL)
+    clean = re.sub(r'</?tool_call>|</?think>', '', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'<br\s*/?>', ' ', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'<[^>]+>', '', clean)
+    clean = clean.strip()
+
+    # Sirf woh lines rakho jo actual bullet points hain (- **Title** ya sub-bullets)
+    lines = clean.split("\n")
+    bullet_lines = [l for l in lines if l.strip().startswith(("- **", "* **", "  - ", "  * "))]
+
     if bullet_lines:
         return "\n".join(bullet_lines)
-    
-    # Agar model ne standard bullets nahi diye lekin kuch text hai, toh fallback return karein
-    return text.strip() or "- No matching opportunities found."
+
+    return clean or "- No matching opportunities found."
 
 def create_completion_with_fallback(**kwargs):
     global client, MODEL_NAME, PROVIDER
@@ -252,7 +254,7 @@ def ask_ai(message: str, student: dict = None) -> str:
                         fn_args = json.loads(tool_call.function.arguments or "{}")
                     except Exception:
                         fn_args = {}
-                    
+
                     result = execute_tool(fn_name, fn_args)
                     messages.append({
                         "role": "tool",
@@ -266,12 +268,12 @@ def ask_ai(message: str, student: dict = None) -> str:
             "role": "user",
             "content": "Output ONLY the final scholarship bullet points in the exact required format. No conversational text."
         })
-        
+
         final_response = create_completion_with_fallback(
             messages=messages,
             temperature=0.0
         )
         return sanitize_output(final_response.choices[0].message.content)
-        
+
     except Exception as err:
         return f"- No matching opportunities found due to an error."
