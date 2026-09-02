@@ -1,279 +1,172 @@
+import streamlit as st
+import sys
 import os
-import json
-import re
-from pathlib import Path
-from dotenv import load_dotenv
-from groq import Groq
-from openai import OpenAI
 
-from backend.tools import (
-    search_opportunities,
-    check_eligibility,
-    get_required_documents,
-    extract_scholarship_details_from_url
-)
-from backend.web_search import search_web
+# Root project folder ko path mein add karna taake 'backend' package theek se import ho
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from backend.agent import ask_ai
 from backend.database import get_all_opportunities
+from backend.web_search import search_web as search_scholarships_web
 
-env_path = Path(__file__).resolve().parent.parent / ".env"
-load_dotenv(env_path)
+st.set_page_config(page_title="ScholarAI - Smart Opportunity Advisor", layout="wide", page_icon="🎓")
 
-groq_key = os.getenv("GROQ_API_KEY")
-openrouter_key = os.getenv("OPENROUTER_API_KEY")
-openai_key = os.getenv("OPENAI_API_KEY")
-tavily_key = os.getenv("TAVILY_API_KEY")
-
-GROQ_MODELS = [
-    "llama-3.1-8b-instant",
-    "openai/gpt-oss-120b",
-    "openai/gpt-oss-20b"
-]
-
-if groq_key:
-    client = Groq(api_key=groq_key)
-    MODEL_NAME = GROQ_MODELS[0]
-    PROVIDER = "groq"
-elif openrouter_key:
-    client = OpenAI(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1")
-    MODEL_NAME = GROQ_MODELS[0]
-    PROVIDER = "openrouter"
-elif openai_key:
-    client = OpenAI(api_key=openai_key)
-    MODEL_NAME = "gpt-4o-mini"
-    PROVIDER = "openai"
-else:
-    raise RuntimeError("No API key configured in .env file.")
-
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search_opportunities",
-            "description": "Search local database for scholarship opportunities matching degree and location.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "degree": {"type": "string", "description": "Academic degree, e.g., BSCS or Undergraduate"},
-                    "location": {"type": "string", "description": "Location or country, e.g., Pakistan"}
-                },
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "check_eligibility",
-            "description": "Check if a student meets criteria for an opportunity ID.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "opportunity_id": {"type": "string", "description": "ID of the scholarship opportunity"}
-                },
-                "required": ["opportunity_id"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_web",
-            "description": "Search web for active scholarships if database has few options.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Search query"}
-                },
-                "required": ["query"]
-            }
-        }
+# ---------------- Custom CSS Styling ----------------
+st.markdown("""
+<style>
+    /* Overall app background */
+    .stApp {
+        background: linear-gradient(180deg, #0f1117 0%, #151823 100%);
     }
-]
 
-SYSTEM_INSTRUCTIONS = """
-You are ScholarAI, a scholarship advisor that outputs ONLY final structured results.
+    /* Main title */
+    h1 {
+        color: #ffffff !important;
+        font-weight: 800 !important;
+        padding-bottom: 0px;
+    }
 
-TOOL USAGE RULES:
-1. If the user asks to find scholarships, ALWAYS call search_opportunities first.
-2. If the user asks to "check eligibility" (or it's implied by their query), you MUST call check_eligibility for EVERY opportunity found before giving your final answer. Never skip this step.
-3. Only call search_web if the local database search returns fewer than 3 results.
+    /* Subheaders */
+    h2, h3 {
+        color: #e8e8e8 !important;
+        font-weight: 600 !important;
+    }
 
-OUTPUT FORMAT RULES (strict):
-1. NEVER write greetings, intros, summaries, or closing remarks.
-2. NEVER explain what you are about to do or what tool you are calling. Just call the tool silently.
-3. Final answer must be ONLY markdown bullet points, nothing before or after them.
-4. Each bullet must be formatted EXACTLY like this, on separate lines:
-   - **Title**
-     - Summary: one line, max 15 words
-     - Deadline: date
-     - Eligibility: ✅ Eligible / ❌ Not Eligible — one short reason
-     - Link: [Official Source](url)
-5. If no results found, output exactly one line: "No matching opportunities found."
-6. Never output JSON, raw pipes (|), code blocks, disclaimers, or apologies.
-7. Total response must not exceed 6 bullet points.
-"""
+    /* Sidebar */
+    section[data-testid="stSidebar"] {
+        background-color: #11141c;
+        border-right: 1px solid #2a2f3d;
+    }
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3 {
+        color: #ffffff !important;
+    }
 
-def sanitize_output(text: str) -> str:
-    if not text:
-        return "- No matching opportunities found."
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #11141c;
+        padding: 6px;
+        border-radius: 12px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 45px;
+        border-radius: 8px;
+        color: #b0b0b0;
+        font-weight: 600;
+        padding: 0px 18px;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #6c5ce7 !important;
+        color: #ffffff !important;
+    }
 
-    # Reasoning-model leaks hatao (think tags, raw tool_call text jo kabhi content mein aa jate hain)
-    clean = re.sub(r'<think>.*?</think>', '', text, flags=re.IGNORECASE | re.DOTALL)
-    clean = re.sub(r'<tool_call>.*?</tool_call>', '', clean, flags=re.IGNORECASE | re.DOTALL)
-    clean = re.sub(r'</?tool_call>|</?think>', '', clean, flags=re.IGNORECASE)
-    clean = re.sub(r'<br\s*/?>', ' ', clean, flags=re.IGNORECASE)
-    clean = re.sub(r'<[^>]+>', '', clean)
-    clean = clean.strip()
+    /* Buttons */
+    .stButton > button {
+        background: linear-gradient(90deg, #6c5ce7, #8e6cf0);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 10px 22px;
+        font-weight: 600;
+        transition: all 0.2s ease-in-out;
+    }
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 14px rgba(108, 92, 231, 0.4);
+    }
 
-    # Sirf woh lines rakho jo actual bullet points hain (- **Title** ya sub-bullets)
-    lines = clean.split("\n")
-    bullet_lines = [l for l in lines if l.strip().startswith(("- **", "* **", "  - ", "  * "))]
+    /* Text areas / text inputs / number input */
+    .stTextArea textarea, .stTextInput input, .stNumberInput input {
+        background-color: #1a1e29 !important;
+        color: #ffffff !important;
+        border: 1px solid #2a2f3d !important;
+        border-radius: 8px !important;
+    }
 
-    if bullet_lines:
-        return "\n".join(bullet_lines)
+    /* Answer / result cards */
+    div[data-testid="stMarkdownContainer"] ul {
+        background-color: #1a1e29;
+        padding: 16px 20px;
+        border-radius: 12px;
+        border: 1px solid #2a2f3d;
+    }
 
-    return clean or "- No matching opportunities found."
+    /* Info & error boxes */
+    .stAlert {
+        border-radius: 10px;
+    }
 
-def create_completion_with_fallback(**kwargs):
-    global client, MODEL_NAME, PROVIDER
-    attempts = []
-    if groq_key:
-        for m in GROQ_MODELS:
-            attempts.append(("groq", Groq(api_key=groq_key), m))
+    /* Spinner text */
+    .stSpinner > div {
+        color: #6c5ce7 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+# ------------------------------------------------------
 
-    if not attempts:
-        raise RuntimeError("No valid Groq API key configured.")
+st.title("🎓 ScholarAI Assistant")
+st.caption("Smart Scholarship & Opportunity Advisor — powered by AI")
 
-    last_err = None
-    for prov, cli, model in attempts:
+st.sidebar.header("📋 Student Profile")
+degree = st.sidebar.text_input("Degree Program", value="BSCS")
+cgpa = st.sidebar.number_input("Current CGPA", min_value=0.0, max_value=4.0, value=3.4, step=0.01)
+location = st.sidebar.text_input("Location / Country", value="Pakistan")
+
+student_payload = {
+    "degree": degree,
+    "cgpa": cgpa,
+    "location": location
+}
+
+tab1, tab2, tab3 = st.tabs(["💬 AI Advisor", "🔍 Browse DB Opportunities", "🌐 Web Search"])
+
+with tab1:
+    st.subheader("Ask ScholarAI")
+    user_query = st.text_area("Enter your query or request:", value="Find relevant scholarships for my profile and check eligibility.")
+    if st.button("Submit Query"):
+        with st.spinner("ScholarAI is processing tools and checking sources..."):
+            try:
+                response_text = ask_ai(user_query, student_payload)
+                st.markdown("### Answer")
+                st.markdown(response_text)
+            except Exception as e:
+                st.error(f"Error processing AI query: {str(e)}")
+
+with tab2:
+    st.subheader("Database Opportunities")
+    if st.button("Load DB Records"):
         try:
-            kwargs["model"] = model
-            response = cli.chat.completions.create(**kwargs)
-            client = cli
-            MODEL_NAME = model
-            PROVIDER = prov
-            return response
-        except Exception as err:
-            last_err = err
-            err_str = str(err).lower()
-            if any(k in err_str for k in ["404", "400", "429", "decommissioned", "model_not_found", "rate_limit"]):
-                continue
-            raise err
-    raise last_err
+            records = get_all_opportunities()
+            if isinstance(records, list) and records:
+                for item in records:
+                    title = item.get("title", "Opportunity")
+                    opp_id = item.get("id", "")
+                    desc = item.get("description", "")
+                    st.markdown(f"- **{title}** (ID: `{opp_id}`)\n  {desc}")
+            else:
+                st.info("No records found.")
+        except Exception as e:
+            st.error(f"Error fetching DB records: {str(e)}")
 
-def ask_ai(message: str, student: dict = None) -> str:
-    if not student:
-        student = {}
-
-    if not student.get("name"):
-        student["name"] = "Nadir Hussain"
-    if not student.get("degree"):
-        student["degree"] = "BSCS"
-    if not student.get("location"):
-        student["location"] = "Pakistan"
-
-    all_opportunities = get_all_opportunities()
-
-    def execute_tool(func_name: str, args: dict):
-        try:
-            if func_name == "search_opportunities":
-                raw_res = search_opportunities(
-                    degree=args.get("degree") or student.get("degree"),
-                    location=args.get("location") or student.get("location")
-                )
-                if isinstance(raw_res, list) and raw_res:
-                    cleaned = []
-                    for item in raw_res:
-                        title = item.get("title", "Opportunity")
-                        opp_id = item.get("id", "")
-                        desc = item.get("description", "")
-                        deadline = item.get("deadline", "Open")
-                        cleaned.append(f"- **{title}** (ID: `{opp_id}`)\n  - **Summary**: {desc}\n  - **Deadline**: {deadline}")
-                    return "\n".join(cleaned)
-                return "No matching local opportunities found."
-
-            elif func_name == "check_eligibility":
-                opp_id = args.get("opportunity_id")
-                opp = next((i for i in all_opportunities if i["id"] == opp_id), None)
-                if not opp:
-                    return json.dumps({"error": "Opportunity not found"})
-                res = check_eligibility(student, opp)
-                return json.dumps(res) if not isinstance(res, str) else res
-
-            elif func_name == "search_web":
-                raw_res = search_web(args.get("query", message))
-                if isinstance(raw_res, list) and raw_res:
-                    cleaned = []
-                    for item in raw_res:
-                        title = item.get("title", "").strip()
+with tab3:
+    st.subheader("Live Web Search")
+    search_q = st.text_input("Search Keyword", value="HEC Pakistan scholarships 2026")
+    if st.button("Execute Web Search"):
+        with st.spinner("Searching web sources..."):
+            try:
+                search_results = search_scholarships_web(search_q)
+                if isinstance(search_results, list) and search_results:
+                    for item in search_results:
+                        title = item.get("title", "Result")
                         url = item.get("url", "#")
                         content = item.get("content", "")
-                        if title and url:
-                            cleaned.append(f"- **[{title}]({url})**\n  - {content}")
-                    return "\n".join(cleaned[:6]) if cleaned else "No relevant web data found."
-                return str(raw_res)
-        except Exception as e:
-            return json.dumps({"error": str(e)})
-        return json.dumps({"error": "Invalid tool"})
-
-    user_prompt = f"Student Profile: {json.dumps(student)}\nUser Query: {message}"
-    messages = [
-        {"role": "system", "content": SYSTEM_INSTRUCTIONS},
-        {"role": "user", "content": user_prompt}
-    ]
-
-    try:
-        for _ in range(5):
-            response = create_completion_with_fallback(
-                messages=messages,
-                tools=TOOLS,
-                tool_choice="auto",
-                temperature=0.0
-            )
-            response_message = response.choices[0].message
-
-            if response_message.tool_calls:
-                messages.append({
-                    "role": "assistant",
-                    "content": response_message.content or "",
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments
-                            }
-                        } for tc in response_message.tool_calls
-                    ]
-                })
-
-                for tool_call in response_message.tool_calls:
-                    fn_name = tool_call.function.name
-                    try:
-                        fn_args = json.loads(tool_call.function.arguments or "{}")
-                    except Exception:
-                        fn_args = {}
-
-                    result = execute_tool(fn_name, fn_args)
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": json.dumps(result) if not isinstance(result, str) else result
-                    })
-            else:
-                return sanitize_output(response_message.content)
-
-        messages.append({
-            "role": "user",
-            "content": "Output ONLY the final scholarship bullet points in the exact required format. No conversational text."
-        })
-
-        final_response = create_completion_with_fallback(
-            messages=messages,
-            temperature=0.0
-        )
-        return sanitize_output(final_response.choices[0].message.content)
-
-    except Exception as err:
-        return f"- No matching opportunities found due to an error."
+                        if url:
+                            st.markdown(f"- **[{title}]({url})**\n  {content}")
+                        else:
+                            st.markdown(f"- **{title}**: {content}")
+                else:
+                    st.info("No search results found.")
+            except Exception as e:
+                st.error(f"Error executing web search: {str(e)}")

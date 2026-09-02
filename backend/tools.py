@@ -20,10 +20,10 @@ def search_opportunities(degree: str = None, location: str = None) -> list:
             degree_str = str(degree).upper()
             # BSCS, BS CS, IT etc. mapped to BS category
             is_bs_input = any(tag in degree_str for tag in ["BS", "BACHELOR", "COMPUTER SCIENCE", "CS", "IT", "SE"])
-            
+
             match_deg = any(
-                degree_str in str(d).upper() or 
-                str(d).upper() in degree_str or 
+                degree_str in str(d).upper() or
+                str(d).upper() in degree_str or
                 (is_bs_input and str(d).upper() in ["BS", "BACHELORS", "UNDERGRADUATE"])
                 for d in allowed_degrees
             )
@@ -31,8 +31,8 @@ def search_opportunities(degree: str = None, location: str = None) -> list:
         if location:
             location_str = str(location).lower()
             match_loc = any(
-                location_str in str(loc).lower() or 
-                str(loc).lower() in location_str or 
+                location_str in str(loc).lower() or
+                str(loc).lower() in location_str or
                 str(loc).lower() == "all"
                 for loc in allowed_locations
             )
@@ -66,8 +66,8 @@ def check_eligibility(student: dict, opportunity: dict) -> dict:
     else:
         is_bs_student = any(tag in student_degree for tag in ["BS", "BACHELOR", "COMPUTER SCIENCE", "CS", "IT", "SE"])
         degree_matched = any(
-            str(d).upper() in student_degree or 
-            student_degree in str(d).upper() or 
+            str(d).upper() in student_degree or
+            student_degree in str(d).upper() or
             (is_bs_student and str(d).upper() in ["BS", "BACHELORS", "UNDERGRADUATE"])
             for d in allowed_degrees
         )
@@ -81,9 +81,9 @@ def check_eligibility(student: dict, opportunity: dict) -> dict:
         result["location"] = "UNKNOWN"
     else:
         location_matched = any(
-            student_location in loc or 
-            loc in student_location or 
-            loc == "all" or 
+            student_location in loc or
+            loc in student_location or
+            loc == "all" or
             "pakistan" in loc
             for loc in allowed_locations
         ) if allowed_locations else True
