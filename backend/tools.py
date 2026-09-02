@@ -2,6 +2,7 @@ from backend.database import get_all_opportunities
 from backend.web_scraper import fetch_page_content
 from backend.web_search import is_official_source
 
+
 def search_opportunities(degree: str = None, location: str = None) -> list:
     opportunities = get_all_opportunities()
     if not degree and not location:
