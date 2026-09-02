@@ -33,7 +33,7 @@ if groq_key:
     MODEL_NAME = GROQ_MODELS[0]
 elif openrouter_key:
     client = OpenAI(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1")
-    MODEL_NAME = "meta-llama/llama-3.3-70b-instruct"
+    MODEL_NAME = "openai/gpt-oss-120b"
 elif openai_key:
     client = OpenAI(api_key=openai_key)
     MODEL_NAME = "gpt-4o-mini"
