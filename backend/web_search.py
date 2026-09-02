@@ -1,4 +1,6 @@
+cat << 'EOF' > backend/web_search.py
 import os
+import re
 from urllib.parse import urlparse
 from tavily import TavilyClient
 
@@ -28,6 +30,21 @@ def is_official_source(url: str) -> bool:
     except Exception:
         return False
 
+def clean_snippet(text: str) -> str:
+    if not text:
+        return ""
+    # Remove SVG path data, fill attributes, and XML/HTML tags
+    text = re.sub(r'd=[\'"].*?[\'"]', '', text)
+    text = re.sub(r'fill=[\'"].*?[\'"]', '', text)
+    text = re.sub(r'clip-rule=[\'"].*?[\'"]', '', text)
+    text = re.sub(r'class=[\'"].*?[\'"]', '', text)
+    text = re.sub(r'<[^>]+>', '', text)
+    # Remove excessive special characters or code-like artifacts
+    text = re.sub(r'[\[\]{}|\\^~]', ' ', text)
+    # Normalize whitespaces
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
 def search_web(query: str) -> list:
     client = get_tavily_client()
     if not client:
@@ -44,6 +61,13 @@ def search_web(query: str) -> list:
             max_results=10
         )
         results = response.get("results", [])
+        
+        # Clean text content for every search result
+        for res in results:
+            if "content" in res:
+                res["content"] = clean_snippet(res["content"])
+
+        # Prioritize official domains
         results.sort(
             key=lambda result: is_official_source(result.get("url", "")),
             reverse=True
@@ -55,3 +79,4 @@ def search_web(query: str) -> list:
             "url": "",
             "content": f"Web search execution error: {str(e)}"
         }]
+EOF
