@@ -146,10 +146,9 @@ def create_completion_with_fallback(**kwargs):
     if groq_key:
         for m in GROQ_MODELS:
             attempts.append(("groq", Groq(api_key=groq_key), m))
-    if openrouter_key:
-        attempts.append(("openrouter", OpenAI(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1"), "openai/gpt-oss-120b"))
-    if openai_key:
-        attempts.append(("openai", OpenAI(api_key=openai_key), "gpt-4o-mini"))
+
+    if not attempts:
+        raise RuntimeError("No valid Groq API key configured.")
 
     last_err = None
     for prov, cli, model in attempts:
@@ -163,7 +162,7 @@ def create_completion_with_fallback(**kwargs):
         except Exception as err:
             last_err = err
             err_str = str(err).lower()
-            if any(k in err_str for k in ["404", "400", "429", "decommissioned", "model_not_found", "rate_limit", "insufficient_quota", "quota"]):
+            if any(k in err_str for k in ["404", "400", "429", "decommissioned", "model_not_found", "rate_limit"]):
                 continue
             raise err
 
