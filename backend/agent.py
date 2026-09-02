@@ -274,4 +274,4 @@ def ask_ai(message: str, student: dict = None) -> str:
         return sanitize_output(final_response.choices[0].message.content)
 
     except Exception as err:
-        return f"- No matching opportunities found due to an error."
+        return f"- Error details: {str(err)}"
