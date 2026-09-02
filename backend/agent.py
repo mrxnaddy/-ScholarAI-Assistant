@@ -23,8 +23,8 @@ openrouter_key = os.getenv("OPENROUTER_API_KEY")
 openai_key = os.getenv("OPENAI_API_KEY")
 
 GROQ_MODELS = [
-    "openai/gpt-oss-20b",
     "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
     "llama-3.1-8b-instant"
 ]
 
