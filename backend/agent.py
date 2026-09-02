@@ -245,7 +245,7 @@ def ask_ai(message: str, student: dict = None) -> str:
     ]
 
     try:
-        for _ in range(5):
+        for _ in range(12):
             response = create_completion_with_fallback(
                 messages=messages,
                 tools=TOOLS,
@@ -286,15 +286,8 @@ def ask_ai(message: str, student: dict = None) -> str:
             else:
                 return sanitize_output(response_message.content)
 
-        messages.append({
-            "role": "user",
-            "content": "Output ONLY the final scholarship bullet points in the exact required format including eligibility, documents, deadline, and links."
-        })
-
         final_response = create_completion_with_fallback(
             messages=messages,
-            tools=TOOLS,
-            tool_choice="none",
             temperature=0.0
         )
         return sanitize_output(final_response.choices[0].message.content)
