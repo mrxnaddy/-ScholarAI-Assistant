@@ -158,14 +158,23 @@ with tab3:
             try:
                 search_results = search_scholarships_web(search_q)
                 if isinstance(search_results, list) and search_results:
+                    # Markdown Table Construction
+                    table_markdown = "| Scholarship Name | Deadline | Amount | Details / Criteria | Official Link |\n"
+                    table_markdown += "| :--- | :--- | :--- | :--- | :--- |\n"
+                    
                     for item in search_results:
                         title = item.get("title", "Result")
                         url = item.get("url", "#")
-                        content = item.get("content", "")
+                        deadline = item.get("deadline", "Not Specified")
+                        amount = item.get("amount", "Varies")
+                        criteria = item.get("criteria", item.get("content", ""))[:120].replace("\n", " ")
+                        
                         if url:
-                            st.markdown(f"- **[{title}]({url})**\n  {content}")
+                            table_markdown += f"| **{title}** | {deadline} | {amount} | {criteria}... | [Open Link]({url}) |\n"
                         else:
-                            st.markdown(f"- **{title}**: {content}")
+                            table_markdown += f"| **{title}** | {deadline} | {amount} | {criteria}... | N/A |\n"
+                            
+                    st.markdown(table_markdown)
                 else:
                     st.info("No search results found.")
             except Exception as e:
