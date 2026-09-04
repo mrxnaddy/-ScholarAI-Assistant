@@ -33,7 +33,7 @@ if gemini_key:
         api_key=gemini_key,
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
     )
-    MODEL_NAME = "gemini-1.5-flash"
+    MODEL_NAME = "gemini-2.0-flash"
     PROVIDER = "gemini"
 else:
     raise RuntimeError("No GEMINI_API_KEY configured in .env or Streamlit secrets.")
