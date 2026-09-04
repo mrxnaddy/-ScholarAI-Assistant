@@ -32,9 +32,16 @@ if not gemini_key:
 
 if gemini_key:
     client = genai.Client(api_key=gemini_key)
-    MODEL_NAME = "gemini-2.5-flash"
 else:
     raise RuntimeError("No GEMINI_API_KEY configured in .env or Streamlit secrets.")
+
+# Models ki list jo aik ke baad aik try ki jaye gi
+MODELS_TO_TRY = [
+    "gemini-3.6-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro"
+]
 
 SYSTEM_INSTRUCTIONS = """
 You are ScholarAI, an expert scholarship and opportunity advisor. 
@@ -108,24 +115,33 @@ def ask_ai(message: str, student: dict = None) -> str:
 
     user_prompt = f"Student Profile: {json.dumps(student)}\nUser Query: {message}"
 
-    max_retries = 4
-    for attempt in range(max_retries):
-        try:
-            response = client.models.generate_content(
-                model=MODEL_NAME,
-                contents=user_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTIONS,
-                    tools=tools_list,
-                    temperature=0.2,
-                ),
-            )
-            return sanitize_output(response.text)
-        except Exception as err:
-            err_str = str(err)
-            if "503" in err_str or "UNAVAILABLE" in err_str or "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                if attempt < max_retries - 1:
-                    sleep_time = 3 * (attempt + 1)
-                    time.sleep(sleep_time)
-                    continue
-            return f"- Server is experiencing high traffic or rate limits (Error 429/503). Please try again in a few moments. Details: {err_str}"
+    last_error = ""
+    # Models loop: aik model fail ho toh agla try hoga
+    for model_name in MODELS_TO_TRY:
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=user_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTIONS,
+                        tools=tools_list,
+                        temperature=0.2,
+                    ),
+                )
+                if response and response.text:
+                    return sanitize_output(response.text)
+            except Exception as err:
+                err_str = str(err)
+                last_error = err_str
+                # Agar 404 (model not found) hai toh foran agle model par chale jao
+                if "404" in err_str or "NOT_FOUND" in err_str:
+                    break
+                # Agar rate limit ya server busy hai toh thoda wait kar ke retry karo
+                if "503" in err_str or "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    if attempt < max_retries - 1:
+                        time.sleep(2)
+                        continue
+
+    return f"- Server is experiencing high traffic or all models failed. Last error: {last_error}"
