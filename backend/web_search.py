@@ -40,7 +40,6 @@ def clean_snippet(text: str) -> str:
     text = re.sub(r'[\[\]{}|\\^~]', ' ', text)
     text = re.sub(r'\s+', ' ', text)
     
-    # Extra filtering to remove menu/navigation junk words
     junk_patterns = [
         r'Scholarships By.*?Browse Scholarships',
         r'Browse Scholarships',
@@ -52,6 +51,35 @@ def clean_snippet(text: str) -> str:
         text = re.sub(pattern, '', text, flags=re.IGNORECASE)
         
     return text.strip()
+
+def extract_table_fields(content: str) -> dict:
+    """Extracts deadline, amount, criteria, and requirements from text for table display."""
+    deadline = "Not Specified"
+    amount = "Varies / Check Link"
+    criteria = "General Student Eligibility"
+    requirements = "Standard Application"
+
+    # Match common deadline patterns (e.g., May 15, 2026 or 10/30/26)
+    date_match = re.search(r'(?:Deadline:?|by)\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}/\d{1,2}/\d{2,4})', content, re.IGNORECASE)
+    if date_match:
+        deadline = date_match.group(1)
+
+    # Match amount patterns (e.g., $10,000 or 2,500 - 20,000)
+    amount_match = re.search(r'(?:Amount:?|\$)\s*([\d,]+(?:\s*-\s*\$[\d,]+)?)', content, re.IGNORECASE)
+    if amount_match:
+        amount = "$" + amount_match.group(1).replace("$", "")
+
+    # Extract snippet parts for criteria/requirements
+    if len(content) > 50:
+        criteria = content[:150] + "..."
+        requirements = content[150:300] + "..." if len(content) > 150 else "See official portal for documents."
+
+    return {
+        "deadline": deadline,
+        "amount": amount,
+        "criteria": criteria,
+        "requirements": requirements
+    }
 
 def search_web(query: str) -> list:
     client = get_tavily_client()
@@ -77,14 +105,19 @@ def search_web(query: str) -> list:
             raw_content = res.get("content", "")
             cleaned = clean_snippet(raw_content)
             
-            # Skip empty or heavily corrupted snippets
             if len(cleaned) < 30:
                 continue
                 
+            fields = extract_table_fields(cleaned)
+            
             structured_results.append({
                 "title": title,
                 "url": url,
-                "content": cleaned[:400] + "..." if len(cleaned) > 400 else cleaned
+                "deadline": fields["deadline"],
+                "amount": fields["amount"],
+                "criteria": fields["criteria"],
+                "requirements": fields["requirements"],
+                "content": cleaned
             })
             
         structured_results.sort(
@@ -95,7 +128,7 @@ def search_web(query: str) -> list:
         return structured_results if structured_results else [{
             "title": "No Clear Results Found",
             "url": "",
-            "content": "Try searching with more specific keywords like 'HEC undergraduate scholarships' or 'BSCS scholarships Pakistan'."
+            "content": "Try searching with more specific keywords."
         }]
     except Exception as e:
         return [{
