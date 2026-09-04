@@ -37,12 +37,8 @@ else:
 
 # Models ki list jo aik ke baad aik try ki jaye gi
 MODELS_TO_TRY = [
-    "gemini-3.6-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro"
+    "gemini-2.0-flash"
 ]
-
 SYSTEM_INSTRUCTIONS = """
 You are ScholarAI, an expert scholarship and opportunity advisor. 
 When a user asks to find scholarships or opportunities, provide rich, comprehensive, and fully detailed explanations for every matching entry.
