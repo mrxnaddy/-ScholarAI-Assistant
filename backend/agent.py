@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 import streamlit as st
@@ -107,16 +108,23 @@ def ask_ai(message: str, student: dict = None) -> str:
 
     user_prompt = f"Student Profile: {json.dumps(student)}\nUser Query: {message}"
 
-    try:
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTIONS,
-                tools=tools_list,
-                temperature=0.2,
-            ),
-        )
-        return sanitize_output(response.text)
-    except Exception as err:
-        return f"- Error details: {str(err)}"
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_INSTRUCTIONS,
+                    tools=tools_list,
+                    temperature=0.2,
+                ),
+            )
+            return sanitize_output(response.text)
+        except Exception as err:
+            err_str = str(err)
+            if "503" in err_str or "UNAVAILABLE" in err_str:
+                if attempt < max_retries - 1:
+                    time.sleep(2 * (attempt + 1))  # Exponential backoff (2s, 4s)
+                    continue
+            return f"- Server is experiencing high traffic (503 Unavailable). Please try again in a few moments. Error details: {err_str}"
