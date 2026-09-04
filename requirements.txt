@@ -5,3 +5,4 @@ tavily-python
 requests
 python-dotenv
 beautifulsoup4
+google-genai
