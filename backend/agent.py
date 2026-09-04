@@ -32,7 +32,7 @@ if not gemini_key:
 
 if gemini_key:
     client = genai.Client(api_key=gemini_key)
-    MODEL_NAME = "gemini-3.6-flash"
+    MODEL_NAME = "gemini-2.5-flash"
 else:
     raise RuntimeError("No GEMINI_API_KEY configured in .env or Streamlit secrets.")
 
@@ -108,7 +108,7 @@ def ask_ai(message: str, student: dict = None) -> str:
 
     user_prompt = f"Student Profile: {json.dumps(student)}\nUser Query: {message}"
 
-    max_retries = 3
+    max_retries = 4
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
@@ -123,8 +123,9 @@ def ask_ai(message: str, student: dict = None) -> str:
             return sanitize_output(response.text)
         except Exception as err:
             err_str = str(err)
-            if "503" in err_str or "UNAVAILABLE" in err_str:
+            if "503" in err_str or "UNAVAILABLE" in err_str or "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
                 if attempt < max_retries - 1:
-                    time.sleep(2 * (attempt + 1))  # Exponential backoff (2s, 4s)
+                    sleep_time = 3 * (attempt + 1)
+                    time.sleep(sleep_time)
                     continue
-            return f"- Server is experiencing high traffic (503 Unavailable). Please try again in a few moments. Error details: {err_str}"
+            return f"- Server is experiencing high traffic or rate limits (Error 429/503). Please try again in a few moments. Details: {err_str}"
