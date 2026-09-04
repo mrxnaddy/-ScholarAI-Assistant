@@ -3,6 +3,7 @@ import json
 import re
 from pathlib import Path
 from dotenv import load_dotenv
+import streamlit as st
 from openai import OpenAI
 
 from backend.tools import (
@@ -17,17 +18,25 @@ from backend.database import get_all_opportunities
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(env_path)
 
-gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
+gemini_key = os.getenv("GEMINI_API_KEY")
+if not gemini_key:
+    try:
+        gemini_key = st.secrets.get("GEMINI_API_KEY")
+    except Exception:
+        pass
+
+if not gemini_key:
+    gemini_key = os.getenv("OPENAI_API_KEY")
 
 if gemini_key:
     client = OpenAI(
         api_key=gemini_key,
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
     )
-    MODEL_NAME = "gemini-3.6-flash"
+    MODEL_NAME = "gemini-1.5-flash"
     PROVIDER = "gemini"
 else:
-    raise RuntimeError("No GEMINI_API_KEY configured in .env file.")
+    raise RuntimeError("No GEMINI_API_KEY configured in .env or Streamlit secrets.")
 
 TOOLS = [
     {
